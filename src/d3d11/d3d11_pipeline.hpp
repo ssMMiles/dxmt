@@ -27,6 +27,9 @@ struct MTL_GRAPHICS_PIPELINE_DESC {
   SM50_INDEX_BUFFER_FORAMT IndexBufferFormat;
   uint32_t SampleMask;
   uint32_t GSPassthrough;
+  // Metal-specific pipeline configuration
+  uint32_t ImmutableVertexBuffers;
+  uint32_t ImmutableFragmentBuffers;
 };
 
 struct MTL_COMPUTE_PIPELINE_DESC {
