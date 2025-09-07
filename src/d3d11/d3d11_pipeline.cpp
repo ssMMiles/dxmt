@@ -117,8 +117,6 @@ public:
         gs_passthrough_(pDesc->GSPassthrough),
         index_buffer_format_(pDesc->IndexBufferFormat),
         so_layout_(pDesc->SOLayout) {
-    // WARN("CREATING NEW PIPELINE: Original SampleCount=", pDesc->SampleCount,
-    //      " SampleMask=", pDesc->SampleMask);
 
     uint32_t unorm_output_reg_mask = 0;
     for (unsigned i = 0; i < num_rtvs; i++) {
@@ -126,14 +124,9 @@ public:
       unorm_output_reg_mask |= (uint32_t(IsUnorm8RenderTargetFormat(pDesc->ColorAttachmentFormats[i])) << i);
     }
 
-    // Store shader variants for deterministic PSO config extraction
     uint64_t input_layout_hash = ComputeInputLayoutHash(pDesc->InputLayout);
     uint64_t input_layout_pointer = (uint64_t)pDesc->InputLayout;
 
-    // WARN("DEBUG: InputLayout pointer=", std::hex, input_layout_pointer,
-    //      " computed_hash=", input_layout_hash);
-
-    // Store actual input layout elements for later serialization
     if (pDesc->InputLayout) {
       MTL_SHADER_INPUT_LAYOUT_ELEMENT_DESC *elements = nullptr;
       uint32_t element_count =
@@ -141,16 +134,6 @@ public:
       if (elements && element_count > 0) {
         stored_input_layout_elements_.assign(elements,
                                              elements + element_count);
-        // WARN("DEBUG: Stored ", element_count,
-        //      " input layout elements for serialization");
-
-        // // DEBUG: Log each stored element
-        // for (uint32_t i = 0; i < element_count; i++) {
-        //   WARN("DEBUG: Storing element ", i, ": index=", elements[i].Index,
-        //        " slot=", elements[i].Slot, " offset=", elements[i].Offset,
-        //        " format=", elements[i].Format,
-        //        " step=", (int)elements[i].StepFunction);
-        // }
       } else {
         WARN("DEBUG: InputLayout exists but has no elements");
       }
@@ -159,18 +142,12 @@ public:
     }
 
     if (pDesc->SOLayout) {
-      // Use pointer for shader compilation, but store content-based hash for
-      // cache
       ShaderVariantVertexStreamOutput shader_variant{input_layout_pointer,
                                                      (uint64_t)pDesc->SOLayout};
       vertex_variant_ = ShaderVariantVertexStreamOutput{
-          input_layout_hash,
-          (uint64_t)
-              pDesc->SOLayout}; // Still using pointer for SOLayout for now
+          input_layout_hash, (uint64_t)pDesc->SOLayout};
       VertexShader = pDesc->VertexShader->get_shader(shader_variant);
     } else {
-      // Use pointer for shader compilation, but store content-based hash for
-      // cache
       ShaderVariantVertex shader_variant{input_layout_pointer,
                                          pDesc->GSPassthrough,
                                          !pDesc->RasterizationEnabled};
@@ -184,24 +161,6 @@ public:
       pixel_variant_ = ShaderVariantPixel{
           pDesc->SampleMask, pDesc->BlendState->IsDualSourceBlending(),
           depth_stencil_format == WMTPixelFormatInvalid, unorm_output_reg_mask};
-
-      // DEBUG: Log pixel shader variant creation
-      // WARN("=== PIPELINE CREATION PIXEL VARIANT DEBUG ===");
-      // WARN("SampleMask: ", pDesc->SampleMask);
-      // WARN("BlendState->IsDualSourceBlending(): ",
-      //      pDesc->BlendState->IsDualSourceBlending());
-      // WARN("depth_stencil_format == Invalid: ",
-      //      (depth_stencil_format == WMTPixelFormatInvalid));
-      // WARN("unorm_output_reg_mask: ", unorm_output_reg_mask);
-      // WARN("Created pixel variant: sample_mask=",
-      //      std::get<ShaderVariantPixel>(pixel_variant_).sample_mask,
-      //      " dual_source=",
-      //      std::get<ShaderVariantPixel>(pixel_variant_).dual_source_blending,
-      //      " disable_depth=",
-      //      std::get<ShaderVariantPixel>(pixel_variant_).disable_depth_output,
-      //      " unorm_mask=",
-      //      std::get<ShaderVariantPixel>(pixel_variant_).unorm_output_reg_mask);
-
       PixelShader = pDesc->PixelShader->get_shader(
           std::get<ShaderVariantPixel>(pixel_variant_));
     }
@@ -290,8 +249,6 @@ public:
         memcpy(config.input_layout_data, stored_input_layout_elements_.data(),
                total_size);
         config.input_layout_size = static_cast<uint32_t>(total_size);
-        // WARN("DEBUG: Serialized ", stored_input_layout_elements_.size(),
-        //      " input layout elements (", total_size, " bytes)");
       } else {
         WARN("Input layout data too large for cache: ", total_size, " > ",
              sizeof(config.input_layout_data));

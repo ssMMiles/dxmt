@@ -177,11 +177,8 @@ uint32_t PSO_ConfigCache::CalculateCRC32(const void *data, size_t size) {
 
 MTL_GRAPHICS_PIPELINE_DESC PSO_ConfigCache::ReconstructBasicPipelineDesc(
     const PSO_Configuration &config, dxmt::PipelineCache *pipeline_cache) {
-  // WARN("CONFIG BEFORE RECONSTRUCTION: sample_count=", config.sample_count,
-  //      " sample_mask=", config.sample_mask);
   MTL_GRAPHICS_PIPELINE_DESC desc = {};
 
-  // Direct 1:1 field mappings (the easy stuff)
   desc.NumColorAttachments = config.num_rtvs;
   memcpy(desc.ColorAttachmentFormats, config.rtv_formats,
          sizeof(config.rtv_formats));
@@ -189,14 +186,11 @@ MTL_GRAPHICS_PIPELINE_DESC PSO_ConfigCache::ReconstructBasicPipelineDesc(
   desc.TopologyClass = config.topology;
   desc.SampleCount = (uint8_t)config.sample_count;
   desc.SampleMask = config.sample_mask;
-  // WARN("CASTING DEBUG: config.sample_count=", config.sample_count,
-  //      " -> desc.SampleCount=", (int)desc.SampleCount);
   desc.RasterizationEnabled = config.rasterization_enabled;
   desc.GSStripTopology = config.gs_strip_topology;
   desc.GSPassthrough = config.gs_passthrough;
   desc.IndexBufferFormat = (SM50_INDEX_BUFFER_FORAMT)config.index_buffer_format;
 
-  // Shader lookups from pipeline cache (using interface)
   IMTLD3D11PipelineCache *cache_interface =
       reinterpret_cast<IMTLD3D11PipelineCache *>(pipeline_cache);
 
@@ -224,7 +218,6 @@ MTL_GRAPHICS_PIPELINE_DESC PSO_ConfigCache::ReconstructBasicPipelineDesc(
   IMTLD3D11BlendState *blend_state = nullptr;
   cache_interface->AddBlendState(&kDefaultBlendDesc, &blend_state);
 
-  // Complex state reconstruction
   desc.BlendState = blend_state;
   desc.InputLayout = ReconstructInputLayout(config, pipeline_cache);
   desc.SOLayout = ReconstructStreamOutputLayout(config, pipeline_cache);
@@ -309,59 +302,10 @@ bool PSO_ConfigCache::PrewarmSinglePSOConfiguration(
     const PSO_Configuration &config, dxmt::PipelineCache *pipeline_cache) {
   auto config_hash = HashConfiguration(config);
 
-  //   WARN("=== PSO PREWARM DEBUG START ===");
-  //   WARN("Pre-warming PSO config: ", config_hash.toString().substr(0, 8));
-  //   WARN("VS=", (config.vertex_shader_hash != Sha1Hash()
-  //                    ? config.vertex_shader_hash.toString().substr(0, 8)
-  //                    : "none"));
-  //   WARN("PS=", (config.pixel_shader_hash != Sha1Hash()
-  //                    ? config.pixel_shader_hash.toString().substr(0, 8)
-  //                    : "none"));
-  //   WARN("Cached vertex variant: type=",
-  //   (int)config.vertex_variant.variant_type,
-  //        " layout_handle=", config.vertex_variant.input_layout_handle,
-  //        " gs_passthrough=", config.vertex_variant.gs_passthrough,
-  //        " raster_disabled=", config.vertex_variant.rasterization_disabled);
-  //   WARN("Cached pixel variant: type=",
-  //   (int)config.pixel_variant.variant_type,
-  //        " sample_mask=", config.pixel_variant.sample_mask,
-  //        " dual_source=", config.pixel_variant.dual_source_blending,
-  //        " disable_depth=", config.pixel_variant.disable_depth_output,
-  //        " unorm_mask=", config.pixel_variant.unorm_output_reg_mask);
-
   try {
-    // Reconstruct basic pipeline descriptor
     MTL_GRAPHICS_PIPELINE_DESC pipeline_desc =
         ReconstructBasicPipelineDesc(config, pipeline_cache);
 
-    // DEBUG: Log reconstructed pipeline descriptor
-    // WARN("--- RECONSTRUCTED PIPELINE DESC ---");
-    // WARN("VertexShader: ", (pipeline_desc.VertexShader ? "found" : "null"));
-    // WARN("PixelShader: ", (pipeline_desc.PixelShader ? "found" : "null"));
-    // WARN("BlendState: ", (pipeline_desc.BlendState ? "found" : "null"));
-    // WARN("InputLayout: ", (pipeline_desc.InputLayout ? "found" : "null"));
-    // WARN("NumColorAttachments: ", pipeline_desc.NumColorAttachments);
-    // WARN("SampleCount: ", (int)pipeline_desc.SampleCount);
-    // WARN("SampleMask: ", pipeline_desc.SampleMask);
-    // WARN("RasterizationEnabled: ", pipeline_desc.RasterizationEnabled);
-
-    // DEBUG: If blend state exists, check dual source blending
-    // if (pipeline_desc.BlendState) {
-    //   bool reconstructed_dual_source =
-    //       pipeline_desc.BlendState->IsDualSourceBlending();
-    //   WARN("Reconstructed BlendState->IsDualSourceBlending(): ",
-    //        reconstructed_dual_source);
-    //   WARN("Cached dual_source_blending flag: ",
-    //        config.pixel_variant.dual_source_blending);
-    //   if (reconstructed_dual_source !=
-    //       config.pixel_variant.dual_source_blending) {
-    //     WARN("*** MISMATCH: Reconstructed dual source (",
-    //          reconstructed_dual_source, ") != cached (",
-    //          config.pixel_variant.dual_source_blending, ") ***");
-    //   }
-    // }
-
-    // Validate required shaders were found
     if (!pipeline_desc.VertexShader &&
         config.vertex_shader_hash != Sha1Hash()) {
       WARN("Missing vertex shader for PSO: ",
@@ -375,39 +319,18 @@ bool PSO_ConfigCache::PrewarmSinglePSOConfiguration(
           "Missing pixel shader for PSO: ", config_hash.toString().substr(0, 8),
           " PS hash=", config.pixel_shader_hash.toString().substr(0, 8),
           " (shader lookup failed - may not be cached yet)");
-      // Don't fail immediately - some pipelines might not need pixel shaders
-      // or the shader might be loaded later
     }
 
-    // Log what we reconstructed (for debugging)
-    // TRACE(
-    //     "Reconstructed pipeline desc: RTVs=",
-    //     pipeline_desc.NumColorAttachments, " Samples=",
-    //     pipeline_desc.SampleCount, " Raster=",
-    //     pipeline_desc.RasterizationEnabled, " Topo=",
-    //     (int)pipeline_desc.TopologyClass, " VS=", (pipeline_desc.VertexShader
-    //     ? "found" : "null"), " PS=", (pipeline_desc.PixelShader ? "found" :
-    //     "null"));
-
-    // Actually call pipeline creation now that all state reconstruction is
-    // complete
-    // WARN("--- ATTEMPTING PIPELINE CREATION ---");
     IMTLD3D11PipelineCache *cache_interface =
         reinterpret_cast<IMTLD3D11PipelineCache *>(pipeline_cache);
     IMTLCompiledGraphicsPipeline *compiled_pipeline = nullptr;
 
-    // WARN("Calling GetGraphicsPipeline with reconstructed descriptor...");
     cache_interface->GetGraphicsPipeline(&pipeline_desc, &compiled_pipeline);
 
     if (compiled_pipeline) {
-      //   WARN("SUCCESS: Created graphics pipeline from cached PSO config");
-      compiled_pipeline
-          ->Release(); // Release our reference since we're just pre-warming
-                       //   WARN("=== PSO PREWARM DEBUG END (SUCCESS) ===");
+      compiled_pipeline->Release();
       return true;
     } else {
-      //   WARN("FAILED: Failed to create graphics pipeline from cached PSO
-      //   config"); WARN("=== PSO PREWARM DEBUG END (FAILED) ===");
       return false;
     }
 
