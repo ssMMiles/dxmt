@@ -636,8 +636,7 @@ public:
     if (disable_prewarm && strcmp(disable_prewarm, "1") == 0) {
       logToCache("Shader pre-warming disabled via DXMT_DISABLE_PREWARM=1");
     } else {
-      // Pre-warm shaders from disk cache (global, only once)
-      static bool shaders_prewarmed = false;
+      bool shaders_prewarmed = false;
       if (!shaders_prewarmed) {
         logToCache("Starting shader prewarming...");
         PrewarmShaders();
