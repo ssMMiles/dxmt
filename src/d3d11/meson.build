@@ -24,6 +24,7 @@ d3d11_src = [
   'd3d11_pipeline_gs.cpp',
   'd3d11_enumerable.cpp',
   'd3d11_pipeline_cache.cpp',
+  'd3d11_pso_config_cache.cpp',
   'd3d11_context_imm.cpp',
   'd3d11_context_def.cpp',
   'd3d11_multithread.cpp',
@@ -42,15 +43,23 @@ d3d10_src = [
 d3d11_ld_args      = ['-L' + windows_native_install_dir] # a nice trick to force relink
 d3d11_link_depends = []
 
+d3d11_deps = [ 
+  dxgi_dep, 
+  DXBCParser_dep,
+  dxmt_dep,
+  winemetal_dep,
+  util_dep 
+]
+
+if build_airconv_for_windows
+  d3d11_deps += [airconv_dep]
+else
+  d3d11_deps += [airconv_forward_dep]
+endif
+
 d3d11_dll = shared_library('d3d11', d3d11_src, d3d10_src, d3d11_res,
   name_prefix         : '',
-  dependencies        : [ 
-    dxgi_dep, 
-    DXBCParser_dep,
-    airconv_forward_dep,
-    dxmt_dep,
-    winemetal_dep,
-    util_dep ],
+  dependencies        : d3d11_deps,
   include_directories : [ dxmt_include_path ],
   install             : true,
   install_dir         : windows_native_install_dir,
